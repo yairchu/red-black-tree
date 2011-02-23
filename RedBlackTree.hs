@@ -7,6 +7,8 @@ module RedBlackTree
     , redBlackFromList, redBlackToList
     ) where
 
+import Data.List (foldl')
+
 data Zero
 data Succ n
 
@@ -50,7 +52,7 @@ redBlackEmpty :: RedBlackTree a
 redBlackEmpty = RBTree RBNil
 
 redBlackFromList :: Ord a => [a] -> RedBlackTree a
-redBlackFromList = foldr redBlackInsert redBlackEmpty
+redBlackFromList = foldl' (flip redBlackInsert) redBlackEmpty
 
 redBlackToList :: RedBlackTree a -> [a]
 redBlackToList (RBTree node) = bNodeToList node
@@ -77,50 +79,54 @@ data InsertResult n a where
 rbInsert :: Ord a => a -> RBNode n a -> InsertResult n a
 rbInsert x (ItsBlack node) = ValidTree $ bInsert x node
 rbInsert x (ItsRed (RedNode left mid right))
-    | x < mid =
-        case bInsert x left of
-            ItsBlack newLeft -> ValidTree . ItsRed $ RedNode newLeft mid right
-            ItsRed newLeft -> RRB newLeft mid right
-    | otherwise =
-        case bInsert x right of
-            ItsBlack newRight -> ValidTree . ItsRed $ RedNode left mid newRight
-            ItsRed newRight -> BRR left mid newRight
+    | x < mid = rInsert False x left mid right
+    | otherwise = rInsert True x right mid left
+
+rInsert :: Ord a => Bool -> a -> BlackNode n a -> a -> BlackNode n a -> InsertResult n a
+rInsert isRev x left mid right =
+    case bInsert x left of
+        ItsBlack newLeft -> ValidTree . ItsRed $ makeNode isRev RedNode newLeft mid right
+        ItsRed newLeft -> revInsertResult isRev $ RRB newLeft mid right
+
+makeNode :: Bool -> (a -> b -> a -> c) -> a -> b -> a -> c
+makeNode False func left mid right = func left mid right
+makeNode True func left mid right = func right mid left
 
 bInsert :: Ord a => a -> BlackNode n a -> RBNode n a
 bInsert x RBNil = ItsRed $ RedNode RBNil x RBNil
 bInsert x (BlackNode left mid right)
-    | x < mid =
-        case rbInsert x left of
-            ValidTree newLeft -> ItsBlack $ BlackNode newLeft mid right
-            RRB ll lm lr -> leftRrb ll lm lr
-            BRR ll lm (RedNode lrl lrm lrr) -> leftRrb (RedNode ll lm lrl) lrm lrr
-    | otherwise =
-        case rbInsert x right of
-            ValidTree newRight -> ItsBlack $ BlackNode left mid newRight
-            BRR rl rm rr -> rightBrr rl rm rr
-            RRB (RedNode rll rlm rlr) rm rr -> rightBrr rll rlm (RedNode rlr rm rr)
+    | x < mid = bInsertH False x left mid right
+    | otherwise = bInsertH True x right mid left
+
+revInsertResult :: Bool -> InsertResult n a -> InsertResult n a
+revInsertResult False x = x
+revInsertResult True (ValidTree x) = ValidTree x
+revInsertResult True (RRB left mid right) = BRR right mid left
+revInsertResult True (BRR left mid right) = RRB right mid left
+
+revRedNode :: Bool -> RedNode n a -> RedNode n a
+revRedNode False x = x
+revRedNode True (RedNode left mid right) = RedNode right mid left
+
+bInsertH :: Ord a => Bool -> a -> RBNode n a -> a -> RBNode n a -> RBNode (Succ n) a
+bInsertH isRev x left mid right =
+    case revInsertResult isRev $ rbInsert x left of
+        ValidTree newLeft -> ItsBlack $ makeNode isRev BlackNode newLeft mid right
+        RRB ll lm lr -> rrb ll lm lr
+        BRR ll lm lr ->
+            let (RedNode lrl lrm lrr) = revRedNode isRev lr
+            in rrb (makeNode isRev RedNode ll lm lrl) lrm lrr
     where
-        leftRrb ll lm lr =
+        rrb ll lm lr =
             case right of
-                ItsRed (RedNode rl rm rr) ->
-                    ItsRed $ RedNode
-                        (BlackNode (ItsRed ll) lm (ItsBlack lr))
+                ItsRed r ->
+                    let (RedNode rl rm rr) = revRedNode isRev r
+                    in ItsRed $ makeNode isRev RedNode
+                        (makeNode isRev BlackNode (ItsRed ll) lm (ItsBlack lr))
                         mid
-                        (BlackNode (ItsBlack rl) rm (ItsBlack rr))
+                        (makeNode isRev BlackNode (ItsBlack rl) rm (ItsBlack rr))
                 ItsBlack r ->
-                    ItsBlack $ BlackNode
+                    ItsBlack $ makeNode isRev BlackNode
                         (ItsRed ll)
                         lm
-                        (ItsRed (RedNode lr mid r))
-        rightBrr rl rm rr =
-            case left of
-                ItsRed (RedNode ll lm lr) ->
-                    ItsRed $ RedNode
-                        (BlackNode (ItsBlack ll) lm (ItsBlack lr))
-                        mid
-                        (BlackNode (ItsBlack rl) rm (ItsRed rr))
-                ItsBlack l ->
-                    ItsBlack $ BlackNode
-                        (ItsRed (RedNode l mid rl))
-                        rm
-                        (ItsRed rr)
+                        (ItsRed (makeNode isRev RedNode lr mid r))
