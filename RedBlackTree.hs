@@ -35,18 +35,18 @@ indentSide (leftIndent, rightIndent) side =
     where
         (left, mid:right) = break ((`notElem` " |+") . head) $ lines side
 
+showNode :: (Show a, Show b) => String -> a -> b -> a -> String
+showNode color left mid right =
+    indentSide (' ', '|') (show left) ++
+    color ++ ":" ++ show mid ++ "\n" ++
+    indentSide ('|', ' ') (show right)
+
 instance Show a => Show (RedNode n a) where
-    show (RedNode left mid right) =
-        indentSide (' ', '|') (show left) ++
-        "R:" ++ show mid ++ "\n" ++
-        indentSide ('|', ' ') (show right)
+    show (RedNode left mid right) = showNode "R" left mid right
 
 instance Show a => Show (BlackNode n a) where
     show RBNil = ""
-    show (BlackNode left mid right) =
-        indentSide (' ', '|') (show left) ++
-        "B:" ++ show mid ++ "\n" ++
-        indentSide ('|', ' ') (show right)
+    show (BlackNode left mid right) = showNode "B" left mid right
 
 redBlackEmpty :: RedBlackTree a
 redBlackEmpty = RBTree RBNil
