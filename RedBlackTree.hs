@@ -1,3 +1,13 @@
+-- | A binary tree whose type garauntees that it is balanced.
+--
+-- The type of the tree captures the rules of the Red-black tree:
+-- * Each node is considered either Red or Black.
+-- * All the paths from the root to leafs contain the same number of Black nodes.
+-- * A path from the root to a leaf cannot contain two consecutive Red nodes.
+--
+-- These rules assure that the longest path is no more than twice as longer than the shorter one,
+-- because it can only add one Red node after each Black node.
+
 {-# OPTIONS -Wall #-}
 {-# LANGUAGE EmptyDataDecls, ExistentialQuantification, GADTs #-}
 
@@ -13,13 +23,17 @@ import Data.List (foldl')
 data Zero
 data Succ n
 
+-- We use trees whose root is Black. Simply for implementation convinience.
 data Tree a = forall n. Tree (BlackNode n a)
+-- Node types are tagged by their subtree's Black-degree (number of Black nodes per path).
 data BlackNode n a where
+    -- A degree 0 Black node must be an empty tree.
     Nil :: BlackNode Zero a
     BlackNode :: RBNode n a -> a -> RBNode n a -> BlackNode (Succ n) a
 data RBNode n a
     = ItsRed (RedNode n a)
     | ItsBlack (BlackNode n a)
+-- A Red node's children must be Black.
 data RedNode n a = RedNode (BlackNode n a) a (BlackNode n a)
 
 -- Show instance
@@ -114,6 +128,9 @@ rbInsert x (ItsRed (RedNode left mid right))
     | x < mid = rInsert False x left mid right
     | otherwise = rInsert True x right mid left
 
+-- An intermediate results of insert.
+-- These may be invalid trees in that the root is Red and one of its children is also Red.
+-- This is a intermediate result, which will be fixed after being propagated to the parent.
 data InsertResult n a where
     ValidTree :: RBNode n a -> InsertResult n a
     RRB :: RedNode n a -> a -> BlackNode n a -> InsertResult n a
