@@ -2,9 +2,9 @@
 {-# LANGUAGE EmptyDataDecls, ExistentialQuantification, GADTs #-}
 
 module RedBlackTree
-    ( RedBlackTree
-    , redBlackEmpty, redBlackInsert
-    , redBlackFromList, redBlackToList
+    ( Tree
+    , empty, insert
+    , fromList, toList
     ) where
 
 import Data.List (foldl')
@@ -13,9 +13,9 @@ import Data.List (foldl')
 data Zero
 data Succ n
 
-data RedBlackTree a = forall n. RBTree (BlackNode n a)
+data Tree a = forall n. Tree (BlackNode n a)
 data BlackNode n a where
-    RBNil :: BlackNode Zero a
+    Nil :: BlackNode Zero a
     BlackNode :: RBNode n a -> a -> RBNode n a -> BlackNode (Succ n) a
 data RBNode n a
     = ItsRed (RedNode n a)
@@ -23,10 +23,10 @@ data RBNode n a
 data RedNode n a = RedNode (BlackNode n a) a (BlackNode n a)
 
 -- Show instance
-instance Show a => Show (RedBlackTree a) where
-    show (RBTree tree) = show tree
+instance Show a => Show (Tree a) where
+    show (Tree tree) = show tree
 instance Show a => Show (BlackNode n a) where
-    show RBNil = ""
+    show Nil = ""
     show (BlackNode left mid right) = showNode "B" left mid right
 instance Show a => Show (RBNode n a) where
     show (ItsRed tree) = show tree
@@ -48,31 +48,31 @@ indentSide (leftIndent, rightIndent) side =
         (left, mid:right) = break ((`notElem` " |+") . head) $ lines side
 
 -- Functions
-redBlackToList :: RedBlackTree a -> [a]
-redBlackToList (RBTree node) = rbNodeToList (ItsBlack node)
+toList :: Tree a -> [a]
+toList (Tree node) = rbNodeToList (ItsBlack node)
 
 rbNodeToList :: RBNode n a -> [a]
 rbNodeToList (ItsRed (RedNode left x right)) =
     rbNodeToList (ItsBlack left) ++ [x] ++ rbNodeToList (ItsBlack right)
-rbNodeToList (ItsBlack RBNil) = []
+rbNodeToList (ItsBlack Nil) = []
 rbNodeToList (ItsBlack (BlackNode left x right)) =
     rbNodeToList left ++ [x] ++ rbNodeToList right
 
-redBlackEmpty :: RedBlackTree a
-redBlackEmpty = RBTree RBNil
+empty :: Tree a
+empty = Tree Nil
 
-redBlackFromList :: Ord a => [a] -> RedBlackTree a
-redBlackFromList = foldl' (flip redBlackInsert) redBlackEmpty
+fromList :: Ord a => [a] -> Tree a
+fromList = foldl' (flip insert) empty
 
 -- Insert
-redBlackInsert :: Ord a => a -> RedBlackTree a -> RedBlackTree a
-redBlackInsert x (RBTree tree) =
+insert :: Ord a => a -> Tree a -> Tree a
+insert x (Tree tree) =
     case bInsert x tree of
-        ItsBlack newTree -> RBTree newTree
-        ItsRed (RedNode left mid right) -> RBTree $ BlackNode (ItsBlack left) mid (ItsBlack right)
+        ItsBlack newTree -> Tree newTree
+        ItsRed (RedNode left mid right) -> Tree $ BlackNode (ItsBlack left) mid (ItsBlack right)
 
 bInsert :: Ord a => a -> BlackNode n a -> RBNode n a
-bInsert x RBNil = ItsRed $ RedNode RBNil x RBNil
+bInsert x Nil = ItsRed $ RedNode Nil x Nil
 bInsert x (BlackNode left mid right)
     | x < mid = bInsertH False x left mid right
     | otherwise = bInsertH True x right mid left
