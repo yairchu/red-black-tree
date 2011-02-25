@@ -36,6 +36,10 @@ data RBNode n a
 -- A Red node's children must be Black.
 data RedNode n a = RedNode (BlackNode n a) a (BlackNode n a)
 
+-- An isValid function is unnecessary.
+-- It's implementation would be:
+-- > isValid = const True
+
 -- Show instance
 instance Show a => Show (Tree a) where
     show (Tree tree) = show tree
