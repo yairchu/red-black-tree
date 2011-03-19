@@ -32,11 +32,8 @@ data Tree a where
 data Node t n a where
     -- A degree 0 Black node must be an empty tree.
     Nil :: Node Black Zero a
-    BlackNode :: RBNode n a -> a -> RBNode n a -> Node Black (Succ n) a
+    BlackNode :: Node t0 n a -> a -> Node t1 n a -> Node Black (Succ n) a
     RedNode :: Node Black n a -> a -> Node Black n a -> Node Red n a
-data RBNode n a
-    = ItsRed (Node Red n a)
-    | ItsBlack (Node Black n a)
 
 -- An isValid function is unnecessary.
 -- It's implementation would be:
@@ -49,11 +46,8 @@ instance Show a => Show (Node t n a) where
     show Nil = ""
     show (BlackNode left mid right) = showNode "B" left mid right
     show (RedNode left mid right) = showNode "R" left mid right
-instance Show a => Show (RBNode n a) where
-    show (ItsRed tree) = show tree
-    show (ItsBlack tree) = show tree
 
-showNode :: (Show a, Show b) => String -> a -> b -> a -> String
+showNode :: (Show a, Show b, Show c) => String -> a -> b -> c -> String
 showNode color left mid right =
     indentSide (' ', '|') (show left) ++
     color ++ ":" ++ show mid ++ "\n" ++
@@ -73,13 +67,9 @@ toList (Tree node) = nodeToList node
 nodeToList :: Node t n a -> [a]
 nodeToList Nil = []
 nodeToList (BlackNode left x right) =
-    rbNodeToList left ++ [x] ++ rbNodeToList right
+    nodeToList left ++ [x] ++ nodeToList right
 nodeToList (RedNode left x right) =
     nodeToList left ++ [x] ++ nodeToList right
-
-rbNodeToList :: RBNode n a -> [a]
-rbNodeToList (ItsRed node) = nodeToList node
-rbNodeToList (ItsBlack node) = nodeToList node
 
 empty :: Tree a
 empty = Tree Nil
@@ -91,14 +81,15 @@ fromList = foldl' (flip insert) empty
 insert :: Ord a => a -> Tree a -> Tree a
 insert x (Tree tree) =
     case nodeInsert x tree of
-    ValidTree (ItsBlack newTree) -> Tree newTree
-    ValidTree (ItsRed (RedNode left mid right)) -> Tree $ BlackNode (ItsBlack left) mid (ItsBlack right)
+    ValidTree (RedNode left mid right) -> Tree $ BlackNode left mid right
+    ValidTree node@(BlackNode _ _ _) -> Tree node
+    ValidTree Nil -> Tree Nil  -- this shouldnt happen
 
 -- An intermediate results of insert.
 -- These may be invalid trees in that the root is Red and one of its children is also Red.
 -- This is a intermediate result, which will be fixed after being propagated to the parent.
 data InsertResult t n a where
-    ValidTree :: RBNode n a -> InsertResult t n a
+    ValidTree :: Node t0 n a -> InsertResult t1 n a
     RRB :: Node Red n a -> a -> Node Black n a -> InsertResult Red n a
     BRR :: Node Black n a -> a -> Node Red n a -> InsertResult Red n a
 
@@ -118,48 +109,44 @@ nodeInsert x node@(RedNode left mid right)
     | otherwise = nodeInsertH True x $ RedNode right mid left
 
 nodeInsertH :: Ord a => Bool -> a -> Node t n a -> InsertResult t n a
-nodeInsertH _ x Nil = ValidTree . ItsRed $ RedNode Nil x Nil
+nodeInsertH _ x Nil = ValidTree $ RedNode Nil x Nil
 nodeInsertH isRev x (BlackNode left mid right) =
-    case rbInsert x left of
+    case nodeInsert x left of
     insRes ->
         case revInsertResult isRev insRes of
-        ValidTree newLeft -> ValidTree . ItsBlack $ makeNode isRev BlackNode newLeft mid right
+        ValidTree newLeft -> ValidTree . revNode isRev $ BlackNode newLeft mid right
         RRB ll lm lr -> rrb ll lm lr mid right
         BRR ll lm lr ->
             case revNode isRev lr
             of RedNode lrl lrm lrr ->
-                rrb (makeNode isRev RedNode ll lm lrl) lrm lrr mid right
+                rrb (revNode isRev (RedNode ll lm lrl)) lrm lrr mid right
     where
-        rrb :: Node Red n a -> a -> Node Black n a -> a -> RBNode n a -> InsertResult Black (Succ n) a
-        rrb ll lm lr m (ItsRed r) =
-            case revNode isRev r of
+        rrb :: Node Red n a -> a -> Node Black n a -> a -> Node t n a -> InsertResult Black (Succ n) a
+        rrb ll lm lr m (RedNode r0 r1 r2) =
+            case revNode isRev (RedNode r0 r1 r2) of
             RedNode rl rm rr ->
-                ValidTree . ItsRed $ makeNode isRev RedNode
-                    (makeNode isRev BlackNode (ItsRed ll) lm (ItsBlack lr))
+                ValidTree . revNode isRev $ RedNode
+                    (revNode isRev (BlackNode ll lm lr))
                     m
-                    (makeNode isRev BlackNode (ItsBlack rl) rm (ItsBlack rr))
-        rrb ll lm lr m (ItsBlack r) =
-            ValidTree . ItsBlack $ makeNode isRev BlackNode
-                (ItsRed ll)
+                    (revNode isRev (BlackNode rl rm rr))
+        rrb ll lm lr m r@(BlackNode _ _ _) =
+            ValidTree . revNode isRev $ BlackNode
+                ll
                 lm
-                (ItsRed (makeNode isRev RedNode lr m r))
+                (revNode isRev (RedNode lr m r))
+        rrb ll lm lr m r@Nil =
+            ValidTree . revNode isRev $ BlackNode
+                ll
+                lm
+                (revNode isRev (RedNode lr m r))
 nodeInsertH isRev x (RedNode left mid right) =
     case nodeInsert x left of
-        ValidTree (ItsBlack newLeft) -> ValidTree . ItsRed $ makeNode isRev RedNode newLeft mid right
-        ValidTree (ItsRed newLeft) -> revInsertResult isRev $ RRB newLeft mid right
-
-makeNode :: Bool -> (a -> b -> a -> c) -> a -> b -> a -> c
-makeNode False func left mid right = func left mid right
-makeNode True func left mid right = func right mid left
+        ValidTree newLeft@(RedNode _ _ _) -> revInsertResult isRev $ RRB newLeft mid right
+        ValidTree newLeft@(BlackNode _ _ _) -> ValidTree . revNode isRev $ RedNode newLeft mid right
+        ValidTree Nil -> ValidTree . revNode isRev $ RedNode Nil mid right
 
 revNode :: Bool -> Node t n a -> Node t n a
 revNode False x = x
 revNode True Nil = Nil
 revNode True (BlackNode left mid right) = BlackNode right mid left
 revNode True (RedNode left mid right) = RedNode right mid left
-
-rbInsert :: Ord a => a -> RBNode n a -> InsertResult Red n a
-rbInsert x (ItsBlack node) =
-    case nodeInsert x node of
-    ValidTree r -> ValidTree r
-rbInsert x (ItsRed node) = nodeInsert x node
