@@ -9,7 +9,7 @@
 -- because it can only add one Red node after each Black node.
 
 {-# OPTIONS -Wall #-}
-{-# LANGUAGE EmptyDataDecls, ExistentialQuantification, GADTs #-}
+{-# LANGUAGE EmptyDataDecls, GADTs #-}
 
 module RedBlackTree
     ( Tree
@@ -24,7 +24,8 @@ data Zero
 data Succ n
 
 -- We use trees whose root is Black. Simply for implementation convinience.
-data Tree a = forall n. Tree (BlackNode n a)
+data Tree a where
+    Tree :: BlackNode n a -> Tree a
 -- Node types are tagged by their subtree's Black-degree (number of Black nodes per path).
 data BlackNode n a where
     -- A degree 0 Black node must be an empty tree.
