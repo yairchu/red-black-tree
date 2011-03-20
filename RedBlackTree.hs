@@ -115,30 +115,23 @@ nodeInsertH isRev x (BlackNode left mid right) =
     insRes ->
         case revInsertResult isRev insRes of
         ValidTree newLeft -> ValidTree . revNode isRev $ BlackNode newLeft mid right
-        RRB ll lm lr -> rrb ll lm lr mid right
+        RRB ll lm lr -> h right ll lm lr mid
         BRR ll lm lr ->
             case revNode isRev lr
             of RedNode lrl lrm lrr ->
-                rrb (revNode isRev (RedNode ll lm lrl)) lrm lrr mid right
+                h right (revNode isRev (RedNode ll lm lrl)) lrm lrr mid
     where
-        rrb :: Node Red n a -> a -> Node Black n a -> a -> Node t n a -> InsertResult Black (Succ n) a
-        rrb ll lm lr m (RedNode r0 r1 r2) =
-            case revNode isRev (RedNode r0 r1 r2) of
-            RedNode rl rm rr ->
-                ValidTree . revNode isRev $ RedNode
-                    (revNode isRev (BlackNode ll lm lr))
-                    m
-                    (revNode isRev (BlackNode rl rm rr))
-        rrb ll lm lr m r@(BlackNode _ _ _) =
-            ValidTree . revNode isRev $ BlackNode
-                ll
-                lm
-                (revNode isRev (RedNode lr m r))
-        rrb ll lm lr m r@Nil =
-            ValidTree . revNode isRev $ BlackNode
-                ll
-                lm
-                (revNode isRev (RedNode lr m r))
+        h :: Node t n a -> Node Red n a -> a -> Node Black n a -> a -> InsertResult Black (Succ n) a
+        h r@(RedNode _ _ _) = hr (revNode isRev r)
+        h r@(BlackNode _ _ _) = hb r
+        h r@Nil = hb r
+        hr :: Node Red n a -> Node Red n a -> a -> Node Black n a -> a -> InsertResult Black (Succ n) a
+        hr (RedNode rl rm rr) ll lm lr m =
+            ValidTree . revNode isRev $ RedNode
+                (revNode isRev (BlackNode ll lm lr))
+                m
+                (revNode isRev (BlackNode rl rm rr))
+        hb r ll lm lr m = ValidTree . revNode isRev $ BlackNode ll lm (revNode isRev (RedNode lr m r))
 nodeInsertH isRev x (RedNode left mid right) =
     case nodeInsert x left of
         ValidTree newLeft@(RedNode _ _ _) -> revInsertResult isRev $ RRB newLeft mid right
