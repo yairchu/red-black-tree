@@ -53,24 +53,23 @@ showNode color (NodeH left mid right) =
     indentSide (' ', '|') (show left) ++
     color ++ ":" ++ show mid ++ "\n" ++
     indentSide ('|', ' ') (show right)
-
-indentSide :: (Char, Char) -> String -> String
-indentSide _ "" = ""
-indentSide (leftIndent, rightIndent) side =
-    unlines $ map (leftIndent:) left ++ ['+':mid] ++ map (rightIndent:) right
     where
-        (left, mid:right) = break ((`notElem` " |+") . head) $ lines side
+        indentSide _ "" = ""
+        indentSide (leftIndent, rightIndent) side =
+            unlines $ map (leftIndent:) l ++ ['+':m] ++ map (rightIndent:) r
+            where
+                (l, m:r) = break ((`notElem` " |+") . head) $ lines side
 
 -- Functions
 toList :: Tree a -> [a]
-toList (Tree node) = nodeToList node
-
-nodeToList :: Node t n a -> [a]
-nodeToList Nil = []
-nodeToList (BlackNode node) = nodeToListH node
-nodeToList (RedNode node) = nodeToListH node
-nodeToListH :: NodeH l r n a -> [a]
-nodeToListH (NodeH left x right) = nodeToList left ++ [x] ++ nodeToList right
+toList (Tree node) =
+    nodeToList node
+    where
+        nodeToList :: Node t n a -> [a]
+        nodeToList Nil = []
+        nodeToList (BlackNode x) = nodeToListH x
+        nodeToList (RedNode x) = nodeToListH x
+        nodeToListH (NodeH left x right) = nodeToList left ++ [x] ++ nodeToList right
 
 empty :: Tree a
 empty = Tree Nil
@@ -104,12 +103,12 @@ nodeInsert :: Ord a => a -> Node t n a -> InsertResult t n a
 nodeInsert x node =
     nodeInsertH isRev x $ revNode isRev node
     where
-        isRev = nodeInsertIsRev x node
-
-nodeInsertIsRev :: Ord a => a -> Node t n a -> Bool
-nodeInsertIsRev _ Nil = False
-nodeInsertIsRev x (BlackNode (NodeH _ mid _)) = x >= mid
-nodeInsertIsRev x (RedNode (NodeH _ mid _)) = x >= mid
+        isRev :: Bool
+        isRev =
+            case node of
+            Nil -> False
+            (BlackNode (NodeH _ mid _)) -> x >= mid
+            (RedNode (NodeH _ mid _)) -> x >= mid
 
 nodeInsertH :: Ord a => Bool -> a -> Node t n a -> InsertResult t n a
 nodeInsertH _ x Nil = ValidTree . RedNode $ NodeH Nil x Nil
@@ -146,5 +145,6 @@ revNode False x = x
 revNode True Nil = Nil
 revNode True (BlackNode node) = BlackNode $ revNodeH node
 revNode True (RedNode node) = RedNode $ revNodeH node
+
 revNodeH :: NodeH l r n a -> NodeH r l n a
 revNodeH (NodeH left mid right) = NodeH right mid left
