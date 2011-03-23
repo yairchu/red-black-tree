@@ -58,44 +58,58 @@ data InsertResultRule new old where
 
 nodeInsert :: Ord a => a -> Node n a -> InsertResult n a
 nodeInsert x Nil = InsertResult InsertHigher (Node SameHeight Nil x Nil)
-nodeInsert x (Node rule left mid right)
-    | x < mid =
+nodeInsert x node@(Node _ _ mid _) = nodeInsertH (x >= mid) x node
+
+nodeInsertH :: Ord a => Bool -> a -> Node (Succ n) a -> InsertResult (Succ n) a
+nodeInsertH isRev x node =
+    case revNode isRev node of
+    Node rule left mid right ->
         case nodeInsert x left of
-        InsertResult InsertSame newLeft -> InsertResult InsertSame (Node rule newLeft mid right)
-        InsertResult InsertHigher newLeft -> nodeInsertL rule newLeft mid right
-    | otherwise =
-        case nodeInsert x right of
-        InsertResult InsertSame newRight -> InsertResult InsertSame (Node rule left mid newRight)
-        InsertResult InsertHigher newRight -> nodeInsertR rule left mid newRight
+        InsertResult InsertSame newLeft -> InsertResult InsertSame . revNode isRev $ Node rule newLeft mid right
+        InsertResult InsertHigher newLeft -> nodeBalanceH isRev rule newLeft mid right
 
-nodeInsertL :: HeightRule n l r -> Node (Succ l) a -> a -> Node r a -> InsertResult (Succ n) a
-nodeInsertL RightHigher left mid right = InsertResult InsertSame (Node SameHeight left mid right)
-nodeInsertL SameHeight left mid right = InsertResult InsertHigher (Node LeftHigher left mid right)
-nodeInsertL LeftHigher left mid right = rotateR left mid right
+revNode :: Bool -> Node n a -> Node n a
+revNode False x = x
+revNode _ Nil = Nil
+revNode True (Node rule left mid right) =
+    case rule of
+    LeftHigher -> go RightHigher
+    SameHeight -> go SameHeight
+    RightHigher -> go LeftHigher
+    where
+        go newRule = Node newRule right mid left
 
-nodeInsertR :: HeightRule n l r -> Node l a -> a -> Node (Succ r) a -> InsertResult (Succ n) a
-nodeInsertR LeftHigher left mid right = InsertResult InsertSame (Node SameHeight left mid right)
-nodeInsertR SameHeight left mid right = InsertResult InsertHigher (Node RightHigher left mid right)
-nodeInsertR RightHigher left mid right = rotateL left mid right
+nodeBalanceH :: Bool -> HeightRule n l r -> Node (Succ l) a -> a -> Node r a -> InsertResult (Succ n) a
+nodeBalanceH isRev rule left mid right =
+    case rule of
+    RightHigher -> go InsertSame SameHeight
+    SameHeight -> go InsertHigher LeftHigher
+    LeftHigher -> rotate isRev left mid right
+    where
+        go insRule newRule = InsertResult insRule . revNode isRev $ Node newRule left mid right
 
-rotateR :: Node (Succ (Succ n)) a -> a -> Node n a -> InsertResult (Succ (Succ n)) a
-rotateR (Node LeftHigher ll lm lr) m r = InsertResult InsertSame (Node SameHeight ll lm (Node SameHeight lr m r))
-rotateR (Node SameHeight ll lm lr) m r = InsertResult InsertHigher (Node RightHigher ll lm (Node LeftHigher lr m r))
-rotateR (Node RightHigher _ _ Nil) _ _ = undefined  -- cant be!
-rotateR (Node RightHigher ll lm (Node RightHigher lrl lrm lrr)) m r =
-    InsertResult InsertSame (Node SameHeight (Node LeftHigher ll lm lrl) lrm (Node SameHeight lrr m r))
-rotateR (Node RightHigher ll lm (Node SameHeight lrl lrm lrr)) m r =
-    InsertResult InsertSame (Node SameHeight (Node SameHeight ll lm lrl) lrm (Node SameHeight lrr m r))
-rotateR (Node RightHigher ll lm (Node LeftHigher lrl lrm lrr)) m r =
-    InsertResult InsertSame (Node SameHeight (Node SameHeight ll lm lrl) lrm (Node RightHigher lrr m r))
-
-rotateL :: Node n a -> a -> Node (Succ (Succ n)) a -> InsertResult (Succ (Succ n)) a
-rotateL l m (Node RightHigher rl rm rr) = InsertResult InsertSame (Node SameHeight (Node SameHeight l m rl) rm rr)
-rotateL l m (Node SameHeight rl rm rr) = InsertResult InsertHigher (Node LeftHigher (Node RightHigher l m rl) rm rr)
-rotateL _ _ (Node LeftHigher Nil _ _) = undefined  -- cant be!
-rotateL l m (Node LeftHigher (Node LeftHigher rll rlm rlr) rm rr) =
-    InsertResult InsertSame (Node SameHeight (Node SameHeight l m rll) rlm (Node RightHigher rlr rm rr))
-rotateL l m (Node LeftHigher (Node SameHeight rll rlm rlr) rm rr) =
-    InsertResult InsertSame (Node SameHeight (Node SameHeight l m rll) rlm (Node SameHeight rlr rm rr))
-rotateL l m (Node LeftHigher (Node RightHigher rll rlm rlr) rm rr) =
-    InsertResult InsertSame (Node SameHeight (Node LeftHigher l m rll) rlm (Node SameHeight rlr rm rr))
+rotate :: Bool -> Node (Succ (Succ n)) a -> a -> Node n a -> InsertResult (Succ (Succ n)) a
+rotate isRev l m r =
+    case revNode isRev l of
+    Node lRule ll lm lr ->
+        let
+            go0 r0 r1 r2 = InsertResult r0 . revNode isRev . Node r1 ll lm . revNode isRev $ Node r2 lr m r
+        in
+        case lRule of
+        LeftHigher -> go0 InsertSame SameHeight SameHeight
+        SameHeight -> go0 InsertHigher RightHigher LeftHigher
+        RightHigher ->
+            case revNode isRev lr of
+            Nil -> undefined -- should never happen
+            Node lrRule lrl lrm lrr ->
+                let
+                    go1 leftRule rightRule =
+                        InsertResult InsertSame . revNode isRev $ Node SameHeight
+                            (revNode isRev $ Node leftRule ll lm lrl)
+                            lrm
+                            (revNode isRev $ Node rightRule lrr m r)
+                in
+                case lrRule of
+                LeftHigher -> go1 SameHeight RightHigher
+                SameHeight -> go1 SameHeight SameHeight
+                RightHigher -> go1 LeftHigher SameHeight
