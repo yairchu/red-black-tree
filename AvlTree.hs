@@ -112,23 +112,25 @@ rotate isRev l m r =
     case revNode isRev l of
     Node lRule ll lm lr ->
         let
-            go0 r1 = InsertResult auto . revNode isRev . Node r1 ll lm . revNode isRev $ Node auto lr m r
+            go rule = InsertResult auto . revNode isRev . Node rule ll lm . revNode isRev $ Node auto lr m r
         in
         case lRule of
-        LeftHigher -> go0 SameHeight
-        SameHeight -> go0 RightHigher
-        RightHigher ->
-            case revNode isRev lr of
-            Nil -> undefined -- should never happen
-            Node lrRule lrl lrm lrr ->
-                let
-                    go1 leftRule =
-                        InsertResult auto . revNode isRev $ Node SameHeight
-                            (revNode isRev $ Node leftRule ll lm lrl)
-                            lrm
-                            (revNode isRev $ Node auto lrr m r)
-                in
-                case lrRule of
-                LeftHigher -> go1 SameHeight
-                SameHeight -> go1 SameHeight
-                RightHigher -> go1 LeftHigher
+        LeftHigher -> go SameHeight
+        SameHeight -> go RightHigher
+        RightHigher -> rotateH isRev ll lm lr m r
+
+rotateH :: Bool -> Node n a -> a -> Node (Succ n) a -> a -> Node n a -> InsertResult (Succ (Succ n)) a
+rotateH isRev n0 v1 n2 v3 n4 =
+    case revNode isRev n2 of
+    Node n2Rule n2l n2m n2r ->
+        let
+            go rule =
+                InsertResult auto . revNode isRev $ Node SameHeight
+                    (revNode isRev $ Node rule n0 v1 n2l)
+                    n2m
+                    (revNode isRev $ Node auto n2r v3 n4)
+        in
+        case n2Rule of
+        LeftHigher -> go SameHeight
+        SameHeight -> go SameHeight
+        RightHigher -> go LeftHigher
