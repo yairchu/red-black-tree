@@ -1,5 +1,5 @@
 {-# OPTIONS -Wall #-}
-{-# LANGUAGE EmptyDataDecls, FlexibleInstances, GADTs #-}
+{-# LANGUAGE EmptyDataDecls, FlexibleInstances, GADTs, NoMonomorphismRestriction #-}
 
 module AvlTree
     ( Tree
@@ -92,11 +92,11 @@ revNode False x = x
 revNode _ Nil = Nil
 revNode True (Node rule left mid right) =
     case rule of
-    LeftHigher -> go auto
-    SameHeight -> go auto
-    RightHigher -> go auto
+    LeftHigher -> go
+    SameHeight -> go
+    RightHigher -> go
     where
-        go newRule = Node newRule right mid left
+        go = Node auto right mid left
 
 nodeBalanceH :: Bool -> HeightRule n l r -> Node (Succ l) a -> a -> Node r a -> InsertResult (Succ n) a
 nodeBalanceH isRev rule left mid right =
@@ -117,20 +117,20 @@ rotate isRev l m r =
         case lRule of
         LeftHigher -> go SameHeight
         SameHeight -> go RightHigher
-        RightHigher -> InsertResult InsertSame $ rotateH isRev ll lm lr m r
+        RightHigher -> InsertResult auto $ rotateH isRev ll lm lr m r
 
 rotateH :: Bool -> Node n a -> a -> Node (Succ n) a -> a -> Node n a -> Node (Succ (Succ n)) a
 rotateH isRev n0 v1 n2 v3 n4 =
     case revNode isRev n2 of
     Node n2Rule n2l n2m n2r ->
         let
-            go _ =
+            go =
                 revNode isRev $ Node SameHeight
                     (revNode isRev $ Node auto n0 v1 n2l)
                     n2m
                     (revNode isRev $ Node auto n2r v3 n4)
         in
         case n2Rule of
-        LeftHigher -> go undefined
-        SameHeight -> go undefined
-        RightHigher -> go undefined
+        LeftHigher -> go
+        SameHeight -> go
+        RightHigher -> go
