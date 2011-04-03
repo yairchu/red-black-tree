@@ -3,7 +3,7 @@
 
 module AvlTree
     ( Tree
-    , empty, insert
+    , empty, insert, delete
     , fromList, toList
     ) where
 
@@ -56,6 +56,12 @@ insert x (Tree node) =
     case nodeInsert x node of
     InsertResult _ result -> Tree result
 
+delete :: Ord a => a -> Tree a -> Tree a
+delete _ (Tree Nil) = Tree Nil
+delete x (Tree node@(Node _ _ _ _)) =
+    case nodeDelete x node of
+    DeleteResult _ result -> Tree result
+
 data InsertResult n a where
     InsertResult :: InsertResultRule new old -> Node new a -> InsertResult old a
 data InsertResultRule new old where
@@ -66,12 +72,47 @@ nodeInsert :: Ord a => a -> Node n a -> InsertResult n a
 nodeInsert x Nil = InsertResult auto (Node SameHeight Nil x Nil)
 nodeInsert x node@(Node _ _ mid _) = nodeInsertH (x >= mid) x node
 
+data DeleteResult n a where
+    DeleteResult :: DeleteResultRule new old -> Node new a -> DeleteResult old a
+data DeleteResultRule new old where
+    DeleteSame :: DeleteResultRule n n
+    DeleteLower :: DeleteResultRule n (Succ n)
+
+nodeDelete :: Ord a => a -> Node n a -> DeleteResult n a
+nodeDelete _ Nil = DeleteResult auto Nil
+nodeDelete x node@(Node _ _ mid _)
+    | x == mid =
+        case node of
+        Nil -> undefined -- shouldnt happen
+        Node SameHeight Nil _ _ -> DeleteResult auto Nil
+        Node SameHeight left@(Node _ _ _ _) _ right -> go False left right
+        Node LeftHigher left _ right -> go False left right
+        Node RightHigher left _ right -> go True right left
+    | otherwise = nodeDeleteH (x >= mid) x node
+    where
+        go isRev left right =
+            nodeDeleteH isRev mid . revNode isRev $ Node auto newLeft newMid right
+            where
+                (newMid, newLeft) = replaceEdge isRev mid left
+
+replaceEdge :: Bool -> a -> Node (Succ n) a -> (a, Node (Succ n) a)
+replaceEdge isRev x node =
+    case revNode isRev node of
+    Node rule left mid Nil -> (mid, revNode isRev $ Node rule left x Nil)
+    Node rule left mid right@(Node _ _ _ _) ->
+        let (edge, newRight) = replaceEdge isRev x right
+        in (edge, revNode isRev $ Node rule left mid newRight)
+
 class Auto a where
     auto :: a
 instance Auto (InsertResultRule n n) where
     auto = InsertSame
 instance Auto (InsertResultRule (Succ n) n) where
     auto = InsertHigher
+instance Auto (DeleteResultRule n n) where
+    auto = DeleteSame
+instance Auto (DeleteResultRule n (Succ n)) where
+    auto = DeleteLower
 instance Auto (HeightRule (Succ n) (Succ n) n) where
     auto = LeftHigher
 instance Auto (HeightRule n n n) where
@@ -86,6 +127,16 @@ nodeInsertH isRev x node =
         case nodeInsert x left of
         InsertResult InsertSame newLeft -> InsertResult auto . revNode isRev $ Node rule newLeft mid right
         InsertResult InsertHigher newLeft -> nodeBalanceH isRev rule newLeft mid right
+
+nodeDeleteH :: Ord a => Bool -> a -> Node (Succ n) a -> DeleteResult (Succ n) a
+nodeDeleteH isRev x node =
+    case revNode isRev node of
+    Node _ Nil _ _ -> DeleteResult auto node
+    Node rule left@(Node _ _ _ _) mid right ->
+        case nodeDelete x left of
+        DeleteResult DeleteSame newLeft -> DeleteResult auto . revNode isRev $ Node rule newLeft mid right
+        DeleteResult DeleteLower newLeft ->
+            nodeBalanceH2 isRev rule newLeft mid right
 
 revNode :: Bool -> Node n a -> Node n a
 revNode False x = x
@@ -106,6 +157,18 @@ nodeBalanceH isRev rule left mid right =
     LeftHigher -> rotate isRev left mid right
     where
         go newRule = InsertResult auto . revNode isRev $ Node newRule left mid right
+
+nodeBalanceH2 :: Bool -> HeightRule n (Succ l) r -> Node l a -> a -> Node r a -> DeleteResult (Succ n) a
+nodeBalanceH2 isRev rule left mid right =
+    case rule of
+    LeftHigher -> go SameHeight
+    SameHeight -> go RightHigher
+    RightHigher ->
+        case rotate (not isRev) right mid left of
+        InsertResult InsertSame node -> DeleteResult auto node
+        InsertResult InsertHigher node -> DeleteResult auto node
+    where
+        go newRule = DeleteResult auto . revNode isRev $ Node newRule left mid right
 
 rotate :: Bool -> Node (Succ (Succ n)) a -> a -> Node n a -> InsertResult (Succ (Succ n)) a
 rotate isRev l m r =
